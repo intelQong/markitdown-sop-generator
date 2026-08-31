@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "markitdown-sop-generator"
+version = "1.0.0"
+description = "Autonomous AI Statement of Purpose (SOP) Generator & Ingestion Engine powered by Microsoft MarkItDown"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "intelQong" }
+]
+keywords = ["markitdown", "sop", "statement-of-purpose", "admissions", "docx", "llm"]
+dependencies = [
+    "markitdown>=0.1.0",
+    "pdfminer.six>=20240101",
+    "mammoth>=1.8.0",
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+    "openpyxl>=3.1.0",
+]
+
+[project.scripts]
+sop-engine = "sop_engine:main"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools]
+py-modules = ["sop_engine"]
