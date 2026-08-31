@@ -12,6 +12,96 @@ Write-Host "  🎓 AI Statement of Purpose (SOP) Generator Setup  " -ForegroundC
 Write-Host "====================================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Helper function to ensure Git is installed
+function Ensure-GitInstalled {
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        $gitVersion = (git --version)
+        Write-Host "[✓] Found $gitVersion" -ForegroundColor Green
+        return
+    }
+
+    Write-Host "[!] Git is not installed. Attempting to install Git automatically..." -ForegroundColor Yellow
+
+    # 1. Try winget (Windows Package Manager)
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "[*] Installing Git via winget..." -ForegroundColor Blue
+        try {
+            winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements --silent
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        } catch {
+            Write-Host "[!] winget install failed, trying fallback..." -ForegroundColor Yellow
+        }
+    }
+
+    # 2. Try Chocolatey
+    if (-not (Get-Command git -ErrorAction SilentlyContinue) -and (Get-Command choco -ErrorAction SilentlyContinue)) {
+        Write-Host "[*] Installing Git via Chocolatey..." -ForegroundColor Blue
+        try {
+            choco install git -y
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        } catch {
+            Write-Host "[!] choco install failed, trying fallback..." -ForegroundColor Yellow
+        }
+    }
+
+    # 3. Try Scoop
+    if (-not (Get-Command git -ErrorAction SilentlyContinue) -and (Get-Command scoop -ErrorAction SilentlyContinue)) {
+        Write-Host "[*] Installing Git via Scoop..." -ForegroundColor Blue
+        try {
+            scoop install git
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        } catch {
+            Write-Host "[!] scoop install failed, trying fallback..." -ForegroundColor Yellow
+        }
+    }
+
+    # 4. Direct Standalone Installer Download fallback
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Host "[*] Downloading Git installer directly from GitHub..." -ForegroundColor Blue
+        $installerUrl = "https://github.com/git-for-windows/git/releases/download/v2.46.0.windows.1/Git-2.46.0-64-bit.exe"
+        $tempInstaller = Join-Path $env:TEMP "GitInstaller.exe"
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $installerUrl -OutFile $tempInstaller -UseBasicParsing
+            Write-Host "[*] Running silent Git installation..." -ForegroundColor Blue
+            Start-Process -FilePath $tempInstaller -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS" -Wait
+            Remove-Item -Path $tempInstaller -Force -ErrorAction SilentlyContinue
+
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        } catch {
+            Write-Host "[!] Direct download/install failed." -ForegroundColor Yellow
+        }
+    }
+
+    # Verify installation
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        $gitVersion = (git --version)
+        Write-Host "[✓] Successfully installed $gitVersion" -ForegroundColor Green
+    } else {
+        # Check standard default installation paths if not in PATH yet
+        $defaultGitPaths = @(
+            "$env:ProgramFiles\Git\cmd\git.exe",
+            "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
+            "$env:LocalAppData\Programs\Git\cmd\git.exe"
+        )
+        $found = $false
+        foreach ($p in $defaultGitPaths) {
+            if (Test-Path $p) {
+                $gitDir = Split-Path $p
+                $env:Path += ";$gitDir"
+                $found = $true
+                Write-Host "[✓] Git detected at $p" -ForegroundColor Green
+                break
+            }
+        }
+        if (-not $found) {
+            Write-Host "[Error] Could not install or locate Git automatically." -ForegroundColor Red
+            Write-Host "Please install Git manually from https://git-scm.com/ and restart your terminal." -ForegroundColor Yellow
+            exit 1
+        }
+    }
+}
+
 # 1. Detect Python
 $pythonCmd = $null
 if (Get-Command python -ErrorAction SilentlyContinue) {
@@ -54,12 +144,8 @@ if (Test-Path "src\sop_engine.py") {
     $projectDir = (Get-Item -Path "$targetDir").FullName
     Set-Location $projectDir
 } else {
+    Ensure-GitInstalled
     Write-Host "[*] Cloning repository from $repoUrl..." -ForegroundColor Blue
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host "[Error] Git is required to clone the repository." -ForegroundColor Red
-        Write-Host "Please install Git from https://git-scm.com/ or download the repository ZIP." -ForegroundColor Yellow
-        exit 1
-    }
     git clone $repoUrl $targetDir
     Set-Location $targetDir
     $projectDir = (Get-Item -Path ".").FullName
